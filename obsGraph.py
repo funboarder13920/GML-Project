@@ -4,7 +4,10 @@ import arms
 import random
 
 
-def generateStrongObsGraph(n_nodes, alpha, beta):
+def strongObsGraph(n_nodes, alpha, beta):
+	"""Generates a strongly connected graph"""
+	# alpha influences the number of self edges removed. alpha=1 --> all self-edges will be removed
+	# beta influences the number of "peer" edges removed. beta=1 --> only peer edges will be removed
 	G = nx.DiGraph()
 	m = beta/n_nodes-2
 
@@ -30,9 +33,9 @@ def generateStrongObsGraph(n_nodes, alpha, beta):
 	return G
 
 
-def findStrongNodes(G):
+def strongNodes(G):
 	"""Returns a dictionnary of nodes"""
-	#1) Find dual nodes (observec by all and themselves)
+	#1) Find dual nodes (observed by all and themselves)
 	#2) Find self-observed only nodes
 	#3) Find peer-observed only nodes
 	#4) Return everything in a dictionnary
