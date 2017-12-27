@@ -1,1 +1,6 @@
+<<<<<<< HEAD
 .ipynb_checkpoints/
+=======
+.ipynb_checkpoints/*
+__pycache__/*
+>>>>>>> 60ef50c9474d5dbd067754bdb6a24c5a89fe851c
