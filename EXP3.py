@@ -1,5 +1,6 @@
 import numpy as np
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 def EXP3(G, U, eta, gamma, T):
     # nodes of G must be ordered and separated by 1 [0 1 2 ...], [0 2 3] is forbidden
@@ -20,3 +21,27 @@ def EXP3(G, U, eta, gamma, T):
         q[t+1] = np.array([q[t][i]*np.exp(-eta*loss[i]) if i in loss else q[t][i] for i in V])
         q[t+1] = 1/(sum(q[t+1]))*q[t+1]
     return q[-1], losses
+
+def compute_regret(losses, G):
+    n_itr = losses.shape[0]
+    best_arm_mean = np.min([-G.node[node]['arm'].mean for node in G.nodes()]) 
+    return np.cumsum(losses)-best_arm_mean*np.arange(1, n_itr + 1)
+
+def plot_regret(values, labels, savefig=None):
+    plt.figure()
+    n_itr = values[0].shape[0]
+    x = np.arange(1, n_itr+1)
+    for i in range(len(values)):
+        plt.plot(x, values[i], label=labels[i])
+    plt.xlabel('Rounds')
+    plt.ylabel('Cumulative Regret')
+    plt.legend()
+    if savefig:
+        plt.savefig(savefig)
+    plt.show()
+
+def lower_bound():
+    pass
+
+def upper_bound():
+    pass

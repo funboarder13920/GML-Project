@@ -2,22 +2,25 @@ import numpy as np
 import networkx as nx
 import arms
 import random
+import functools
 
 
-def strongObsGraph(n_nodes, alpha, beta):
+def strong_obs_graph(n_nodes, alpha, beta, graph_arms=None):
 	"""Generates a strongly connected graph"""
 	# alpha influences the number of self edges removed. alpha=1 --> all self-edges will be removed
 	# beta influences the number of "peer" edges removed. beta=1 --> only peer edges will be removed
 	G = nx.DiGraph()
 	m = beta/n_nodes-2
 
+	if graph_arms == None:
+		graph_arms = [arms.ArmBernoulli(0.5) for _ in range(n_nodes)]
+
 	# Step 1: generate fully connected graph
 	for nodeID in range(n_nodes):
-		G.add_node(nodeID, arm=arms.ArmBernoulli(0.5))
-		for neighID in range(nodeID+1):
-			G.add_edge(nodeID, neighID)
-			if neighID != nodeID:
-				G.add_edge(neighID, nodeID)
+		G.add_node(nodeID, arm=graph_arms[nodeID])
+	for node1 in range(n_nodes):
+		for node2 in range(n_nodes):
+			G.add_edge(node1, node2)
 	for nodeID in G.nodes():
 		u = random.random()
 		if u < alpha:
@@ -29,11 +32,11 @@ def strongObsGraph(n_nodes, alpha, beta):
 			edges.remove(nodeID)
 			edgesToRemove = random.sample(edges, k+1)
 			for neighID in edgesToRemove:
-				G.remove_edge(nodeID, neighID)
+				G.remove_edge(neighID, nodeID)
 	return G
 
 
-def strongNodes(G):
+def strong_nodes(G):
 	"""Returns a dictionnary of nodes"""
 	#1) Find dual nodes (observed by all and themselves)
 	#2) Find self-observed only nodes
@@ -64,3 +67,11 @@ def strongNodes(G):
 		elif selfObserved:
 			strongNodes["self"].append(nodeID)
 	return strongNodes
+
+def observability_type(G):
+	nodes_type = strong_nodes(G)
+	_exhausted = object()
+	strongly = len(nodes_type["dual"]) + len(nodes_type["peer"]) + len(nodes_type["self"]) == len(G.nodes())
+	weakly = (not strongly) and functools.reduce(lambda u,v: u and v, [next(G.predecessors(node), _exhausted) != _exhausted for node in G.nodes()], True)
+	unobservable = not( weakly or strongly)
+	return strongly, weakly, unobservable
