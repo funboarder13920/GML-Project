@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import stats
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
@@ -27,18 +28,71 @@ def compute_regret(losses, G):
     best_arm_mean = np.min([-G.node[node]['arm'].mean for node in G.nodes()]) 
     return np.cumsum(losses)-best_arm_mean*np.arange(1, n_itr + 1)
 
-def plot_regret(values, labels, savefig=None):
+def plot_regret(values, labels, asympt=True, linReg=False, savefig=None):
     plt.figure()
     n_itr = values[0].shape[0]
     x = np.arange(1, n_itr+1)
+    maxVal = 0
     for i in range(len(values)):
         plt.plot(x, values[i], label=labels[i])
+        maxVal = max(maxVal, max(values[i]))
     plt.xlabel('Rounds')
     plt.ylabel('Cumulative Regret')
+    if asympt:
+        plt.plot(x, x, label="No learning")
+    if linReg:
+        [der2,linAreas] = find_linear_areas(values[0], 0.01)
+        ct = 1
+        for linArea in linAreas:
+            [slope, intercept] = lin_regression(values[0], linArea)
+            print("Found linear domain {0:2d} at [{1:4d}, {2:4d}]: Slope {3:.2f}, intercept {4:.2f}".format(ct, linArea[0], linArea[-1], slope, intercept))
+            plt.plot(x, intercept + slope*x, label="Linear domain {0:2d}".format(ct))
+            ct = ct+1
     plt.legend()
+    plt.ylim([0,maxVal])
     if savefig:
         plt.savefig(savefig)
     plt.show()
+    return der2,linAreas
+
+def find_linear_areas(values, thr, filt=True):
+    der2 = np.ones(len(values))
+    prevValues = np.roll(values,1)
+    nextValues = np.roll(values,-1)
+    der2 = prevValues + nextValues - 2*values
+    n = len(der2) - 1
+    if filt:
+        der2 = gaussian_filter(der2)
+        n = len(der2) - 1
+    linTrend = (abs(der2)<thr)
+    parsedLinTrendsAreas = []
+    seg = []
+    for ind in range(n):
+        if linTrend[ind]:
+            seg.append(ind)
+        elif seg != []:
+            parsedLinTrendsAreas.append(seg)
+            seg = []
+    return der2, parsedLinTrendsAreas
+    
+def lin_regression(values, idxRange):
+    slope, intercept, r_value, p_value, std_err = stats.linregress(range(len(values[idxRange])),values[idxRange])
+    return slope, intercept
+
+def gaussian_filter(values,strippedXs=False,degree=15,baseWeight=2.0):  
+    window=degree*2-1  
+    weight=np.array([baseWeight]*window)  
+    weightGauss=[]  
+    for i in range(window):  
+        i=i-degree+1  
+        frac=i/float(window)  
+        gauss=1/(np.exp((4*(frac))**2))  
+        weightGauss.append(gauss)  
+        weight=np.array(weightGauss)*weight  
+        smoothed=[0.0]*(len(values)-window)  
+        for i in range(len(smoothed)):  
+            smoothed[i]=sum(np.array(values[i:i+window])*weight)/sum(weight)  
+        return np.array(smoothed)
 
 def lower_bound():
     pass
