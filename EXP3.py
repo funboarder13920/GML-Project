@@ -28,7 +28,7 @@ def compute_regret(losses, G):
     best_arm_mean = np.min([-G.node[node]['arm'].mean for node in G.nodes()]) 
     return np.cumsum(losses)-best_arm_mean*np.arange(1, n_itr + 1)
 
-def plot_regret(values, labels, asympt=True, linReg=False, savefig=None):
+def plot_regret(values, labels, asympt=True, reg="Linear", savefig=None, stdev=15):
     plt.figure()
     n_itr = values[0].shape[0]
     x = np.arange(1, n_itr+1)
@@ -38,16 +38,42 @@ def plot_regret(values, labels, asympt=True, linReg=False, savefig=None):
         maxVal = max(maxVal, max(values[i]))
     plt.xlabel('Rounds')
     plt.ylabel('Cumulative Regret')
+    
     if asympt:
         plt.plot(x, x, label="No learning")
-    if linReg:
-        [der2,linAreas] = find_linear_areas(values[0], 0.01)
+    
+    if reg:
+        regValues = values
+        threshold = 0.06
+        if reg == "Pwr1/2":
+            regValues = np.power(values,2)
+            threshold = np.sqrt(threshold)
+        elif reg == "Pwr2/3":
+            regValues = np.power(values,3.0/2)
+            threshold = np.power(threshold,2.0/3)
+            
+        [der2,linAreas] = find_linear_areas(regValues[0], threshold, stdev=stdev)
         ct = 1
         for linArea in linAreas:
-            [slope, intercept] = lin_regression(values[0], linArea)
-            print("Found linear domain {0:2d} at [{1:4d}, {2:4d}]: Slope {3:.2f}, intercept {4:.2f}".format(ct, linArea[0], linArea[-1], slope, intercept))
-            plt.plot(x, intercept + slope*x, label="Linear domain {0:2d}".format(ct))
-            ct = ct+1
+            [slope, intercept] = lin_regression(regValues[0], linArea)
+            print(
+                "Found {0:s} domain {1:2d} at [{2:4d}, {3:4d}]: Slope {4:.2f}, intercept {5:.2f}".format(
+                    reg,
+                    ct,
+                    linArea[0],
+                    linArea[-1],
+                    slope,
+                    intercept-slope*linArea[0]
+                )
+            )
+            y = intercept + slope*(x-linArea[0])
+            if reg == "Pwr1/2":
+                y = np.sqrt(np.clip(y,0,1e+30))
+            elif reg == "Pwr2/3":
+                y = np.power(np.clip(y,0,1e+30),2.0/3)
+            plt.plot(x, y, label="{0:s} domain {1:2d}".format(reg, ct))
+            ct = ct+1     
+    
     plt.legend()
     plt.ylim([0,maxVal])
     if savefig:
@@ -55,14 +81,14 @@ def plot_regret(values, labels, asympt=True, linReg=False, savefig=None):
     plt.show()
     return der2,linAreas
 
-def find_linear_areas(values, thr, filt=True):
+def find_linear_areas(values, thr, filt=True, stdev=15):
     der2 = np.ones(len(values))
     prevValues = np.roll(values,1)
     nextValues = np.roll(values,-1)
     der2 = prevValues + nextValues - 2*values
     n = len(der2) - 1
     if filt:
-        der2 = gaussian_filter(der2)
+        der2 = gaussian_filter(der2, degree=stdev)
         n = len(der2) - 1
     linTrend = (abs(der2)<thr)
     parsedLinTrendsAreas = []
@@ -79,9 +105,9 @@ def lin_regression(values, idxRange):
     slope, intercept, r_value, p_value, std_err = stats.linregress(range(len(values[idxRange])),values[idxRange])
     return slope, intercept
 
-def gaussian_filter(values,strippedXs=False,degree=15,baseWeight=2.0):  
+def gaussian_filter(values,strippedXs=False,degree=15):  
     window=degree*2-1  
-    weight=np.array([baseWeight]*window)  
+    weight=np.array([1.0]*window)  
     weightGauss=[]  
     for i in range(window):  
         i=i-degree+1  
