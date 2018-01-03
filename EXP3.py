@@ -2,33 +2,55 @@ import numpy as np
 from scipy import stats
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from obsGraph import observability_type
 
-def EXP3(G, U, eta, gamma, T):
+def EXP3(G, U, eta, gamma, T=5000, n_sim=50, perturbations=None):
     # nodes of G must be ordered and separated by 1 [0 1 2 ...], [0 2 3] is forbidden
+    # perturbations is a dictionnary, mapping perturbation times to lists of edges to cut
+    if perturbations is None:
+        perturbations = {}
     V = list(G.nodes())
-    t = 0
-    u = np.array([0 if not n in U else 1/len(U) for n in V])
-    q = (1/len(V))*np.ones((T+1, len(V)))
-    p = np.zeros((T, len(V)))
-    losses = np.zeros((T,))
-    for t in tqdm(range(T), desc="Simulating EXP3"):
-        p[t] = (1-gamma)*q[t]+gamma*u
-        draw = np.random.multinomial(1, p[t])
-        It = V[np.argmax(draw)]
+    avg_losses = np.zeros((T,))
+    avg_q = np.zeros((T+1, len(V)))
+    
+    for sim in range(n_sim):
+        t = 0
+        u = np.array([0 if not n in U else 1/len(U) for n in V])
+        q = (1/len(V))*np.ones((T+1, len(V)))
+        p = np.zeros((T, len(V)))
+        losses = np.zeros((T,))
+        for t in tqdm(range(T), desc="Simulating EXP3"):
+        
+            edges = perturbations.get(t,[])
+            for edge in edges:
+                G.remove_edge(edge[0], edge[1])
+                print("Edge {0} removed at iteration {1}".format(edge, t))
+                obs_dict = {0:"unobservable", 1:"weakly observable", 2:"strongly observable"}
+                obs_type = observability_type(G)
+                print("G is {}".format(obs_dict[obs_type]))
+            p[t] = (1-gamma)*q[t]+gamma*u
+            draw = np.random.multinomial(1, p[t])
+            It = V[np.argmax(draw)]
         
         # observe
-        loss = {action: G.node[action]['arm'].sample()/sum([p[t][pred] for pred in G.predecessors(action)]) for action in G.successors(It)}
-        losses[t] = G.node[It]['arm'].sample()
-        q[t+1] = np.array([q[t][i]*np.exp(-eta*loss[i]) if i in loss else q[t][i] for i in V])
-        q[t+1] = 1/(sum(q[t+1]))*q[t+1]
-    return q[-1], losses
+            loss = {
+                action: G.node[action]['arm'].sample()/sum(
+                    [p[t][pred] for pred in G.predecessors(action)]
+                ) for action in G.successors(It)
+            }
+            losses[t] = G.node[It]['arm'].sample()
+            q[t+1] = np.array([q[t][i]*np.exp(-eta*loss[i]) if i in loss else q[t][i] for i in V])
+            q[t+1] = 1/(sum(q[t+1]))*q[t+1]
+        avg_losses = avg_losses + (1.0/n_sim)*losses
+        avg_q = avg_q + (1.0/n_sim)*q
+    return avg_q[-1], avg_losses
 
 def compute_regret(losses, G):
     n_itr = losses.shape[0]
     best_arm_mean = np.min([-G.node[node]['arm'].mean for node in G.nodes()]) 
     return np.cumsum(losses)-best_arm_mean*np.arange(1, n_itr + 1)
 
-def plot_regret(values, labels, asympt=True, reg="Linear", savefig=None, stdev=15):
+def plot_regret(values, labels, asympt=True, reg="", savefig=None, stdev=15):
     plt.figure()
     n_itr = values[0].shape[0]
     x = np.arange(1, n_itr+1)
@@ -42,7 +64,10 @@ def plot_regret(values, labels, asympt=True, reg="Linear", savefig=None, stdev=1
     if asympt:
         plt.plot(x, x, label="No learning")
     
-    if reg:
+    der2 = []
+    linAreas = []
+    
+    if reg != "":
         regValues = values
         threshold = 0.06
         if reg == "Pwr1/2":
