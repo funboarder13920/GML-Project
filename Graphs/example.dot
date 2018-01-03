@@ -1,0 +1,10 @@
+digraph "()_with_int_labels" {
+	0	 [arm="<arms.ArmBernoulli object at 0x7f86b6e553c8>"];
+	0 -> 0;
+	1	 [arm="<arms.ArmBernoulli object at 0x7f86b6e55438>"];
+	0 -> 1;
+	2	 [arm="<arms.ArmBernoulli object at 0x7f86b6e55470>"];
+	2 -> 2;
+	3	 [arm="<arms.ArmBernoulli object at 0x7f86b6e554a8>"];
+	3 -> 3;
+}
