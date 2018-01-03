@@ -6,7 +6,11 @@ from obsGraph import observability_type
 
 def EXP3(G, U, eta, gamma, T=5000, n_sim=50, perturbations=None):
     # nodes of G must be ordered and separated by 1 [0 1 2 ...], [0 2 3] is forbidden
-    # perturbations is a dictionnary, mapping perturbation times to lists of edges to cut
+    # perturbations is a dictionnary, mapping perturbation times to lists of edges to cut  
+    obs_dict = {0:"unobservable", 1:"weakly observable", 2:"strongly observable"}
+    obs_type = observability_type(G)
+    print("G is {}".format(obs_dict[obs_type]))
+    
     if perturbations is None:
         perturbations = {}
     V = list(G.nodes())
@@ -14,6 +18,7 @@ def EXP3(G, U, eta, gamma, T=5000, n_sim=50, perturbations=None):
     avg_q = np.zeros((T+1, len(V)))
     
     for sim in range(n_sim):
+        H = G.copy()
         t = 0
         u = np.array([0 if not n in U else 1/len(U) for n in V])
         q = (1/len(V))*np.ones((T+1, len(V)))
@@ -23,22 +28,24 @@ def EXP3(G, U, eta, gamma, T=5000, n_sim=50, perturbations=None):
         
             edges = perturbations.get(t,[])
             for edge in edges:
-                G.remove_edge(edge[0], edge[1])
-                print("Edge {0} removed at iteration {1}".format(edge, t))
-                obs_dict = {0:"unobservable", 1:"weakly observable", 2:"strongly observable"}
-                obs_type = observability_type(G)
-                print("G is {}".format(obs_dict[obs_type]))
+                if edge in list(H.edges()):
+                    H.remove_edge(edge[0], edge[1])
+                    print("Edge {0} removed at iteration {1}".format(edge, t))
+                    obs_type = observability_type(H)
+                    print("G is {}".format(obs_dict[obs_type]))
+                else:
+                    print("Edge is already missing from graph")
             p[t] = (1-gamma)*q[t]+gamma*u
             draw = np.random.multinomial(1, p[t])
             It = V[np.argmax(draw)]
         
         # observe
             loss = {
-                action: G.node[action]['arm'].sample()/sum(
-                    [p[t][pred] for pred in G.predecessors(action)]
-                ) for action in G.successors(It)
+                action: H.node[action]['arm'].sample()/sum(
+                    [p[t][pred] for pred in H.predecessors(action)]
+                ) for action in H.successors(It)
             }
-            losses[t] = G.node[It]['arm'].sample()
+            losses[t] = H.node[It]['arm'].sample()
             q[t+1] = np.array([q[t][i]*np.exp(-eta*loss[i]) if i in loss else q[t][i] for i in V])
             q[t+1] = 1/(sum(q[t+1]))*q[t+1]
         avg_losses = avg_losses + (1.0/n_sim)*losses

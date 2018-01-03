@@ -72,7 +72,8 @@ def observability_type(G):
     nodes_type = strong_nodes(G)
     _exhausted = object()
     strongly = len(nodes_type["dual"]) + len(nodes_type["peer"]) + len(nodes_type["self"]) == len(G.nodes())
-    weakly = (not strongly) and functools.reduce(lambda u,v: u and v, [next(G.predecessors(node), _exhausted) != _exhausted for node in G.nodes()], True)
+    # weakly = (not strongly) and functools.reduce(lambda u,v: u and v, [next(G.predecessors(node), _exhausted) != _exhausted for node in G.nodes()], True)
+    weakly = (not strongly) and np.all([next(iter(G.predecessors(node)), _exhausted) != _exhausted for node in G.nodes()])
     unobservable = not( weakly or strongly)
     obs_type = 0
     if weakly:
