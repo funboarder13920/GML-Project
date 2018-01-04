@@ -1,15 +1,17 @@
 import numpy as np
+import pdb
 from scipy import stats
 from tqdm import tqdm
+from networkx.algorithms.approximation import *
 import matplotlib.pyplot as plt
-from obsGraph import observability_type
+from obsGraph import observability_type, weak_dom_number
 
 def EXP3(G, U, eta, gamma, T=5000, n_sim=50, perturbations=None):
     # nodes of G must be ordered and separated by 1 [0 1 2 ...], [0 2 3] is forbidden
     # perturbations is a dictionnary, mapping perturbation times to lists of edges to cut  
     obs_dict = {0:"unobservable", 1:"weakly observable", 2:"strongly observable"}
     obs_type = observability_type(G)
-    print("G is {}".format(obs_dict[obs_type]))
+    # print("G is {}".format(obs_dict[obs_type]))
     
     if perturbations is None:
         perturbations = {}
@@ -17,14 +19,14 @@ def EXP3(G, U, eta, gamma, T=5000, n_sim=50, perturbations=None):
     avg_losses = np.zeros((T,))
     avg_q = np.zeros((T+1, len(V)))
     
-    for sim in range(n_sim):
+    for sim in tqdm(range(n_sim), desc="Simulating EXP3 on {} runs".format(n_sim)):
         H = G.copy()
         t = 0
         u = np.array([0 if not n in U else 1/len(U) for n in V])
         q = (1/len(V))*np.ones((T+1, len(V)))
         p = np.zeros((T, len(V)))
         losses = np.zeros((T,))
-        for t in tqdm(range(T), desc="Simulating EXP3"):
+        for t in range(T):
         
             edges = perturbations.get(t,[])
             for edge in edges:
@@ -46,7 +48,77 @@ def EXP3(G, U, eta, gamma, T=5000, n_sim=50, perturbations=None):
                 ) for action in H.successors(It)
             }
             losses[t] = H.node[It]['arm'].sample()
-            q[t+1] = np.array([q[t][i]*np.exp(-eta*loss[i]) if i in loss else q[t][i] for i in V])
+            q[t+1] = np.array(
+                [q[t][i]*np.exp(-eta*loss[i]) if i in loss else q[t][i] for i in V]
+            )
+            q[t+1] = 1/(sum(q[t+1]))*q[t+1]
+        avg_losses = avg_losses + (1.0/n_sim)*losses
+        avg_q = avg_q + (1.0/n_sim)*q
+    return avg_q[-1], avg_losses
+
+
+def EXP3Opt(G, U, T=5000, n_sim=50, perturbations=None, alpha=None, delta=None):
+    # nodes of G must be ordered and separated by 1 [0 1 2 ...], [0 2 3] is forbidden
+    obs_dict = {0:"unobservable", 1:"weakly observable", 2:"strongly observable"}
+    obs_type = observability_type(G)
+    
+    #1) If no independence number is provided, find an approximation of it, only for small graphs
+    K = G.number_of_nodes()
+    if obs_type == 2 and alpha is None and K < 100:
+        max_ind_set = independent_set.maximum_independent_set(G)
+        alpha = len(max_ind_set)
+    
+    if obs_type == 1 and delta is None and K < 100:
+        delta = weak_dom_number(G)
+
+    #2) Determining algorithm constants
+    if obs_type == 2:
+        gamma = min(np.sqrt(1/(alpha*T)), 0.5)
+        eta = 2*gamma
+    else:
+        gamma = min(np.power(delta*np.log(K)/T, 1.0/3),0.5)
+        eta = np.power(gamma,2)/delta
+        
+    if perturbations is None:
+        perturbations = {}
+    V = list(G.nodes())
+    avg_losses = np.zeros((T,))
+    avg_q = np.zeros((T+1, len(V)))
+    
+    #NB) We do not handle changes in parameters in case the graph observability graph changes
+    
+    #3) Run simulations
+    for sim in tqdm(range(n_sim), desc="Simulating EXP3 on {} runs".format(n_sim)):
+        H = G.copy()
+        t = 0
+        u = np.array([0 if not n in U else 1/len(U) for n in V])
+        q = (1/len(V))*np.ones((T+1, len(V)))
+        p = np.zeros((T, len(V)))
+        losses = np.zeros((T,))
+        for t in range(T):
+            edges = perturbations.get(t,[])
+            for edge in edges:
+                if edge in list(H.edges()):
+                    H.remove_edge(edge[0], edge[1])
+                    print("Edge {0} removed at iteration {1}".format(edge, t))
+                    obs_type = observability_type(H)
+                    print("G is {}".format(obs_dict[obs_type]))
+                else:
+                    print("Edge is already missing from graph")
+            p[t] = (1-gamma)*q[t]+gamma*u
+            draw = np.random.multinomial(1, p[t])
+            It = V[np.argmax(draw)]
+        
+        # observe
+            loss = {
+                action: H.node[action]['arm'].sample()/sum(
+                    [p[t][pred] for pred in H.predecessors(action)]
+                ) for action in H.successors(It)
+            }
+            losses[t] = H.node[It]['arm'].sample()
+            q[t+1] = np.array(
+                [q[t][i]*np.exp(-eta*loss[i]) if i in loss else q[t][i] for i in V]
+            )
             q[t+1] = 1/(sum(q[t+1]))*q[t+1]
         avg_losses = avg_losses + (1.0/n_sim)*losses
         avg_q = avg_q + (1.0/n_sim)*q
@@ -57,7 +129,7 @@ def compute_regret(losses, G):
     best_arm_mean = np.min([-G.node[node]['arm'].mean for node in G.nodes()]) 
     return np.cumsum(losses)-best_arm_mean*np.arange(1, n_itr + 1)
 
-def plot_regret(values, labels, asympt=True, reg="", savefig=None, stdev=15):
+def plot_regret(G, values, labels, asympt=True, reg="", savefig=None, stdev=15):
     plt.figure()
     n_itr = values[0].shape[0]
     x = np.arange(1, n_itr+1)
@@ -69,7 +141,9 @@ def plot_regret(values, labels, asympt=True, reg="", savefig=None, stdev=15):
     plt.ylabel('Cumulative Regret')
     
     if asympt:
-        plt.plot(x, x, label="No learning")
+        best_arm_mean = np.min([-G.node[node]['arm'].mean for node in G.nodes()])
+        avg_arm_mean = np.mean([-G.node[node]['arm'].mean for node in G.nodes()])
+        plt.plot(x, x*(avg_arm_mean - best_arm_mean), label="No learning")
     
     der2 = []
     linAreas = []

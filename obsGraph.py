@@ -2,6 +2,7 @@ import numpy as np
 import networkx as nx
 import arms
 import random
+from networkx.algorithms.approximation import *
 import functools
 
 
@@ -36,37 +37,54 @@ def strong_obs_graph(n_nodes, alpha, beta, graph_arms=None):
 	return G
 
 
+def weak_nodes(G):
+    weak_nodes = []
+    for edge in list(G.edges()):
+        if edge[1] not in weak_nodes:
+            weak_nodes.append(edge[1])
+    return weak_nodes
+
+
 def strong_nodes(G):
 	"""Returns a dictionnary of nodes"""
 	#1) Find dual nodes (observed by all and themselves)
 	#2) Find self-observed only nodes
 	#3) Find peer-observed only nodes
 	#4) Return everything in a dictionnary
-	strongNodes = {}
-	strongNodes["dual"] = []
-	strongNodes["self"] = []
-	strongNodes["peer"] = []
-	nodeList = G.nodes()
-	edgeList = G.edges()
+	strong_nodes = {}
+	strong_nodes["dual"] = []
+	strong_nodes["self"] = []
+	strong_nodes["peer"] = []
+	node_list = G.nodes()
+	edge_list = G.edges()
 
 	for nodeID in G.nodes():
-		selfObserved = False
-		peerObserved = True
+		self_observed = False
+		peer_observed = True
 
 		if (nodeID, nodeID) in G.edges():
-			selfObserved = True
+			self_observed = True
 
 		for neighID in G.nodes():
 			if neighID != nodeID and (neighID, nodeID) not in G.edges():
-				peerObserved = False
+				peer_observed = False
 
-		if peerObserved and selfObserved:
-			strongNodes["dual"].append(nodeID)
-		elif peerObserved:
-			strongNodes["peer"].append(nodeID)
-		elif selfObserved:
-			strongNodes["self"].append(nodeID)
-	return strongNodes
+		if peer_observed and self_observed:
+			strong_nodes["dual"].append(nodeID)
+		elif peer_observed:
+			strong_nodes["peer"].append(nodeID)
+		elif self_observed:
+			strong_nodes["self"].append(nodeID)
+	return strong_nodes
+
+
+def weak_dom_number(G):
+    """Computes an approximation of the weak domination number of G"""
+    H = G.subgraph(weak_nodes(G))
+    weak_dom_set = dominating_set.min_edge_dominating_set(H)
+    delta = len(weak_dom_set)
+    return delta
+
 
 def observability_type(G):
     nodes_type = strong_nodes(G)
