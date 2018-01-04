@@ -78,51 +78,12 @@ def EXP3Opt(G, U, T=5000, n_sim=50, perturbations=None, alpha=None, delta=None):
     else:
         gamma = min(np.power(delta*np.log(K)/T, 1.0/3),0.5)
         eta = np.power(gamma,2)/delta
-        
-    if perturbations is None:
-        perturbations = {}
-    V = list(G.nodes())
-    avg_losses = np.zeros((T,))
-    avg_q = np.zeros((T+1, len(V)))
     
     #NB) We do not handle changes in parameters in case the graph observability graph changes
     
     #3) Run simulations
-    for sim in tqdm(range(n_sim), desc="Simulating EXP3 on {} runs".format(n_sim)):
-        H = G.copy()
-        t = 0
-        u = np.array([0 if not n in U else 1/len(U) for n in V])
-        q = (1/len(V))*np.ones((T+1, len(V)))
-        p = np.zeros((T, len(V)))
-        losses = np.zeros((T,))
-        for t in range(T):
-            edges = perturbations.get(t,[])
-            for edge in edges:
-                if edge in list(H.edges()):
-                    H.remove_edge(edge[0], edge[1])
-                    print("Edge {0} removed at iteration {1}".format(edge, t))
-                    obs_type = observability_type(H)
-                    print("G is {}".format(obs_dict[obs_type]))
-                else:
-                    print("Edge is already missing from graph")
-            p[t] = (1-gamma)*q[t]+gamma*u
-            draw = np.random.multinomial(1, p[t])
-            It = V[np.argmax(draw)]
-        
-        # observe
-            loss = {
-                action: H.node[action]['arm'].sample()/sum(
-                    [p[t][pred] for pred in H.predecessors(action)]
-                ) for action in H.successors(It)
-            }
-            losses[t] = H.node[It]['arm'].sample()
-            q[t+1] = np.array(
-                [q[t][i]*np.exp(-eta*loss[i]) if i in loss else q[t][i] for i in V]
-            )
-            q[t+1] = 1/(sum(q[t+1]))*q[t+1]
-        avg_losses = avg_losses + (1.0/n_sim)*losses
-        avg_q = avg_q + (1.0/n_sim)*q
-    return avg_q[-1], avg_losses
+    return EXP3(G, U, eta, gamma, T, n_sim, perturbations)
+
 
 def compute_regret(losses, G):
     n_itr = losses.shape[0]
@@ -229,5 +190,16 @@ def gaussian_filter(values,strippedXs=False,degree=15):
 def lower_bound():
     pass
 
-def upper_bound():
-    pass
+def upper_bound(G, T, alpha=None, delta=None):
+    obs_type = observability_type(G)
+    if obs_type == 2:
+        if alpha is None:
+            max_ind_set = independent_set.maximum_independent_set(G)
+            alpha = len(max_ind_set)
+        return alpha**(1/2)*np.array([t**(1/2) for t in range(T)])
+    if obs_type == 1:
+        if delta is None:
+            delta = weak_dom_number(G)
+        return delta**(1/3)*np.array([t**(2/3) for t in range(T)])
+    if obs_type == 0:
+        return np.array([t for t in range(T)])
