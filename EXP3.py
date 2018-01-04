@@ -177,7 +177,7 @@ def plot_regret(G, values, labels, asympt=True, reg="", savefig=None, stdev=15):
                 y = np.sqrt(np.clip(y,0,1e+30))
             elif reg == "Pwr2/3":
                 y = np.power(np.clip(y,0,1e+30),2.0/3)
-            plt.plot(x, y, label="{0:s} domain {1:2d}".format(reg, ct))
+            plt.plot(x[linArea], y[linArea], label="{0:s} domain {1:2d}".format(reg, ct))
             ct = ct+1     
     
     plt.legend()
