@@ -138,7 +138,7 @@ def plot_regret(G, values, labels, asympt=True, reg="", savefig=None, stdev=15):
                 y = np.sqrt(np.clip(y,0,1e+30))
             elif reg == "Pwr2/3":
                 y = np.power(np.clip(y,0,1e+30),2.0/3)
-            plt.plot(x[linArea], y[linArea], label="{0:s} domain {1:2d}".format(reg, ct))
+            plt.plot(x, y, label="{0:s} domain {1:2d}".format(reg, ct))
             ct = ct+1     
     
     plt.legend()
@@ -196,10 +196,10 @@ def upper_bound(G, T, alpha=None, delta=None):
         if alpha is None:
             max_ind_set = independent_set.maximum_independent_set(G)
             alpha = len(max_ind_set)
-        return alpha**(1/2)*np.array([t**(1/2) for t in range(T)])
+        return alpha**(1/2)*np.array([t**(1/2)*np.log((1+t)*G.number_of_nodes()) for t in range(T)])
     if obs_type == 1:
         if delta is None:
             delta = weak_dom_number(G)
-        return delta**(1/3)*np.array([t**(2/3) for t in range(T)])
+        return (delta*np.log(G.number_of_nodes()))**(1/3)*np.array([t**(2/3) for t in range(T)])
     if obs_type == 0:
         return np.array([t for t in range(T)])
