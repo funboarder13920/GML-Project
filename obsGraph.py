@@ -114,6 +114,6 @@ def remove_edges(G, perturbations, n=None):
             count += 1
     print("Edge {0} removed".format(edge))
     obs_type = observability_type(H)
-    print("G is now {}".format(obs_dict[obs_type]))
-    print("{} edges were removed".format(count-1))
+    print("Graph is now {}".format(obs_dict[obs_type]))
+    print("{} edges were removed \n".format(count-1))
     return H
