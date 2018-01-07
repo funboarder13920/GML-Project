@@ -99,3 +99,21 @@ def observability_type(G):
     if strongly:
         obs_type = 2
     return obs_type
+
+
+
+def remove_edges(G, perturbations, n=None):
+    obs_dict = {0:"unobservable", 1:"weakly observable", 2:"strongly observable"}
+    H = G.copy()
+    if n is None:
+        n = len(perturbations)
+    count = 1
+    for edge in perturbations:
+        if edge in H.edges() and count <= n:
+            H.remove_edge(edge[0], edge[1])
+            count += 1
+    print("Edge {0} removed".format(edge))
+    obs_type = observability_type(H)
+    print("G is now {}".format(obs_dict[obs_type]))
+    print("{} edges were removed".format(count-1))
+    return H

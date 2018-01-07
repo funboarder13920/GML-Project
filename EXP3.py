@@ -64,11 +64,11 @@ def EXP3Opt(G, U, T=5000, n_sim=50, perturbations=None, alpha=None, delta=None):
     
     #1) If no independence number is provided, find an approximation of it, only for small graphs
     K = G.number_of_nodes()
-    if obs_type == 2 and alpha is None and K < 100:
+    if obs_type == 2 and alpha is None:
         max_ind_set = independent_set.maximum_independent_set(G)
         alpha = len(max_ind_set)
     
-    if obs_type == 1 and delta is None and K < 100:
+    if obs_type == 1 and delta is None:
         delta = weak_dom_number(G)
 
     #2) Determining algorithm constants
@@ -147,6 +147,7 @@ def plot_regret(G, values, labels, asympt=True, reg="", savefig=None, stdev=15):
         plt.savefig(savefig)
     plt.show()
     return der2,linAreas
+
 
 def find_linear_areas(values, thr, filt=True, stdev=15):
     der2 = np.ones(len(values))
