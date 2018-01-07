@@ -4,7 +4,7 @@ from scipy import stats
 from tqdm import tqdm
 from networkx.algorithms.approximation import *
 import matplotlib.pyplot as plt
-from obsGraph import observability_type, weak_dom_number
+from obsGraph import observability_type, dom_number, dom_set
 
 def EXP3(G, U, eta, gamma, T=5000, n_sim=50, perturbations=None):
     # nodes of G must be ordered and separated by 1 [0 1 2 ...], [0 2 3] is forbidden
@@ -57,7 +57,7 @@ def EXP3(G, U, eta, gamma, T=5000, n_sim=50, perturbations=None):
     return avg_q[-1], avg_losses
 
 
-def EXP3Opt(G, U, T=5000, n_sim=50, perturbations=None, alpha=None, delta=None):
+def EXP3Opt(G, U, T=5000, n_sim=50, perturbations=None, alpha=None, weak_dom=None):
     # nodes of G must be ordered and separated by 1 [0 1 2 ...], [0 2 3] is forbidden
     obs_dict = {0:"unobservable", 1:"weakly observable", 2:"strongly observable"}
     obs_type = observability_type(G)
@@ -68,16 +68,19 @@ def EXP3Opt(G, U, T=5000, n_sim=50, perturbations=None, alpha=None, delta=None):
         max_ind_set = independent_set.maximum_independent_set(G)
         alpha = len(max_ind_set)
     
-    if obs_type == 1 and delta is None:
-        delta = weak_dom_number(G)
+    if obs_type == 1 and weak_dom is None:
+        # this is not a nice approximation
+        weak_dom = dom_set(G)
 
     #2) Determining algorithm constants
     if obs_type == 2:
         gamma = min(np.sqrt(1/(alpha*T)), 0.5)
         eta = 2*gamma
     else:
+        delta = len(weak_dom)
         gamma = min(np.power(delta*np.log(K)/T, 1.0/3),0.5)
         eta = np.power(gamma,2)/delta
+        U = weak_dom
     
     #NB) We do not handle changes in parameters in case the graph observability graph changes
     
@@ -193,14 +196,16 @@ def lower_bound():
 
 def upper_bound(G, T, alpha=None, delta=None):
     obs_type = observability_type(G)
+    K = G.number_of_nodes()
     if obs_type == 2:
         if alpha is None:
             max_ind_set = independent_set.maximum_independent_set(G)
             alpha = len(max_ind_set)
-        return alpha**(1/2)*np.array([t**(1/2)*np.log((1+t)*G.number_of_nodes()) for t in range(T)])
+        return [np.sqrt(alpha)*np.sqrt(t)*(1/alpha+np.log(K))+\
+                2*np.sqrt(t*alpha)*(1+4*alpha*np.log(K*K*np.sqrt(alpha*t)/4)) for t in range(1, T+1)]
     if obs_type == 1:
         if delta is None:
-            delta = weak_dom_number(G)
-        return (delta*np.log(G.number_of_nodes()))**(1/3)*np.array([t**(2/3) for t in range(T)])
+            delta = dom_number(G)
+        return [2*np.power(delta*np.log(K)*t*t, 1/3)+2*K*np.power(np.log(K)**2*t/delta, 1/3) for t in range(1, T+1)]
     if obs_type == 0:
         return np.array([t for t in range(T)])
